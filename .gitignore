@@ -1,0 +1,12 @@
+.DS_Store
+.ipynb_checkpoints/
+.mobius_colab_run/
+.notebook-run-venv/
+Qwen3_5_4B_Hmm_GGUF_to_CPU_ONNX_Mobius_executed.ipynb
+onnx_outputs/
+onnx_outputs.zip
+*.onnx
+*.onnx.data
+*.gguf
+__pycache__/
+*.py[cod]
