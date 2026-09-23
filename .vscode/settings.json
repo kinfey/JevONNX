@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^node -e 'const fs=require\\(\"fs\"\\); const path=\"finetuning/Qwen3_5_0\\.8B_FT\\.ipynb\"; const n=JSON\\.parse\\(fs\\.readFileSync\\(path,\"utf8\"\\)\\); const han=/\\[\\\\u3400-\\\\u9fff\\]/u; for\\(const \\[i,c\\] of n\\.cells\\.entries\\(\\)\\)\\{const source=c\\.source\\.join\\(\"\"\\);if\\(han\\.test\\(source\\)\\) throw Error\\(`Chinese source in cell \\$\\{i\\}`\\)\\} for\\(const path of \\[\"README\\.md\",\"README\\.zh\\.md\"\\]\\)\\{const text=fs\\.readFileSync\\(path,\"utf8\"\\);if\\(!text\\.includes\\(\"\\./finetuning/Qwen3_5_0\\.8B_FT\\.ipynb\"\\)\\)throw Error\\(`Missing notebook link: \\$\\{path\\}`\\)\\} console\\.log\\(`Notebook JSON valid; \\$\\{n\\.cells\\.length\\} cells have no Chinese in source; both README links present`\\) '$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

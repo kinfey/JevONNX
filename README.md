@@ -28,6 +28,7 @@ than Jev.
 - Stateful inference for Qwen3.5's hybrid DeltaNet and full-attention architecture.
 - A Python API compatible with Hmm's `noul`, `choice`, and `score` decision shapes.
 - A standalone runner for the converted ONNX model.
+- A separate Qwen3.5-0.8B fine-tuning and CUDA FP16 ONNX export notebook using Microsoft Olive.
 
 ## System One, Jev, and Hmm
 
@@ -126,11 +127,55 @@ while adding the hybrid-state handling required by Qwen3.5.
 |---|---|
 | `Qwen3_5_4B_Hmm_GGUF_to_CPU_ONNX_Mobius_fixed.ipynb` | Colab conversion and validation workflow |
 | `run_hmm_onnx.py` | Standalone typed-decision runner |
+| [`finetuning/Qwen3_5_0.8B_FT.ipynb`](./finetuning/Qwen3_5_0.8B_FT.ipynb) | Separate Olive LoRA fine-tuning, CUDA ONNX export, and validation workflow |
 
-The notebook uses `/content/onnx_outputs` on Colab and
+The 4B Mobius conversion notebook uses `/content/onnx_outputs` on Colab and
 `.mobius_colab_run/onnx_outputs` outside Colab. Generated models, downloaded GGUF
 files, virtual environments, archives, and executed notebooks are excluded from Git
 because the ONNX external-data file is approximately 2.6 GB.
+
+## Qwen3.5-0.8B fine-tuning with Microsoft Olive
+
+The [fine-tuning notebook](./finetuning/Qwen3_5_0.8B_FT.ipynb) is a **separate
+GPU workflow** from the 4B-Hmm GGUF-to-CPU-ONNX conversion described above. It
+starts with `Qwen/Qwen3.5-0.8B`, builds Microsoft Olive from pinned Git revision
+`2fbeaf4316930d62bf7b85658ccc6e752d4b6f4c`, and follows the
+[Olive fine-tune CLI guide](https://microsoft.github.io/Olive/how-to/cli/cli-finetune.html).
+Use Linux with an NVIDIA CUDA GPU supporting BF16 (for example, a suitable Colab
+runtime); this is not a macOS CPU/MPS training workflow. The notebook pins CUDA
+12-compatible ONNX Runtime packages for export. Restart the runtime after installing
+or changing native runtime packages.
+
+Run the notebook cells in order when you are ready to install dependencies, download
+model/data, train, or export. It loads
+[`n4ze3m/typed-decisions-synth`](https://huggingface.co/datasets/n4ze3m/typed-decisions-synth),
+preserves the dataset's **case-level** train/validation split, and creates one
+option-letter example per question. Choice options are shuffled deterministically;
+samples exceeding 768 tokens are discarded. `olive finetune --dry_run` generates a
+version-matched configuration, which the notebook changes to `line-by-line` training
+with the original validation split. The training cell then calls Olive in the
+notebook's Python kernel. It uses BF16 LoRA (rank 32, alpha 64), learning rate
+`1e-4`, and one epoch.
+
+Training produces a PEFT adapter under `olive_typed_decisions/finetuned/adapter`.
+Subsequent **optional** cells use Olive `ModelBuilder` to export the base model
+with that adapter to `olive_typed_decisions/onnx_fp16_cuda` as a CUDA FP16
+ONNX Runtime GenAI model, run a sample inference and first-token probability
+checks, and optionally compute validation accuracy, NLL, and ECE. Export artifacts
+include `model.onnx`, external weights, tokenizer files, and `genai_config.json`.
+An optional upload cell creates a model card and prompts for a Hugging Face login;
+use an account and token with write access to the target repository. Never place
+a token in the notebook or repository.
+
+The question format and option shuffling are inspired by
+[Hmm's training script](https://github.com/n4ze3m/hmm/blob/main/training/train.py),
+but **the training objectives differ**: Olive applies full-sequence language-model
+SFT on the gold answer; it does not train Hmm's candidate-letter-only hard/teacher
+soft-label mixture or reshuffle options every step. Teacher probabilities are
+retained for analysis only. Olive's full-sequence `eval_loss` is not the
+candidate-letter NLL, accuracy, or ECE, and no matching calibration or benchmark
+result is claimed here. Training, export, evaluation, and upload must be run and
+verified in a suitable GPU environment.
 
 ## Reproducibility
 

@@ -26,6 +26,7 @@ Hmm 通过微调 Qwen3.5-4B，让模型以选项概率而不是普通生成文�
 - 支持 Qwen3.5 DeltaNet 与完整注意力混合架构的有状态推理。
 - 与 Hmm 的 `noul`、`choice` 和 `score` 结构兼容的 Python API。
 - 可直接运行转换后 ONNX 模型的独立脚本。
+- 独立的 Microsoft Olive Qwen3.5-0.8B 微调和 CUDA FP16 ONNX 导出 notebook。
 
 ## System One、Jev 与 Hmm
 
@@ -119,10 +120,46 @@ Mobius
 |---|---|
 | `Qwen3_5_4B_Hmm_GGUF_to_CPU_ONNX_Mobius_fixed.ipynb` | Colab 转换与验证流程 |
 | `run_hmm_onnx.py` | 独立类型化决策运行脚本 |
+| [`finetuning/Qwen3_5_0.8B_FT.ipynb`](./finetuning/Qwen3_5_0.8B_FT.ipynb) | 独立的 Olive LoRA 微调、CUDA ONNX 导出与验证流程 |
 
-Notebook 在 Colab 中使用 `/content/onnx_outputs`，在非 Colab 环境中使用
+4B Mobius 转换 notebook 在 Colab 中使用 `/content/onnx_outputs`，在非 Colab 环境中使用
 `.mobius_colab_run/onnx_outputs`。生成的模型、下载的 GGUF、虚拟环境、压缩包和
 已执行 notebook 均不会提交到 Git，因为 ONNX 外部权重文件约为 2.6 GB。
+
+## 使用 Microsoft Olive 微调 Qwen3.5-0.8B
+
+[微调 notebook](./finetuning/Qwen3_5_0.8B_FT.ipynb) 是与上文 4B-Hmm GGUF
+转 CPU ONNX **不同的 GPU 流程**。它从 `Qwen/Qwen3.5-0.8B` 开始，从固定 Git
+revision `2fbeaf4316930d62bf7b85658ccc6e752d4b6f4c` 构建 Microsoft Olive，
+并参考 [Olive 微调 CLI 指南](https://microsoft.github.io/Olive/how-to/cli/cli-finetune.html)。
+需要支持 BF16 的 Linux NVIDIA CUDA GPU（例如合适的 Colab runtime）；不能在
+macOS CPU/MPS 上运行此训练流程。notebook 为导出固定了兼容 CUDA 12 的
+ONNX Runtime 包版本。安装或更改原生运行时包后，应重启 runtime。
+
+准备好安装依赖、下载模型及数据、训练或导出后，再按顺序执行相应 cell。
+notebook 读取
+[`n4ze3m/typed-decisions-synth`](https://huggingface.co/datasets/n4ze3m/typed-decisions-synth)，
+保留数据集**按 case 划分**的 train/validation，每个问题生成一个选项字母样本。
+choice 选项采用确定性洗牌；超过 768 token 的样本直接丢弃。先通过
+`olive finetune --dry_run` 生成与版本匹配的配置，再改为 `line-by-line` 训练，
+并接入原验证集。训练 cell 在 notebook 的 Python 内核中直接调用 Olive，
+使用 BF16 LoRA（rank 32、alpha 64）、`1e-4` 学习率和 1 个 epoch。
+
+训练产物是 `olive_typed_decisions/finetuned/adapter` 下的 PEFT adapter。后续
+**可选** cell 使用 Olive `ModelBuilder` 将基础模型与 adapter 导出到
+`olive_typed_decisions/onnx_fp16_cuda`，得到 CUDA FP16 ONNX Runtime GenAI
+模型；还可以运行样本推理、首 token 概率检查，以及计算验证集的 accuracy、
+NLL 和 ECE。导出产物包含 `model.onnx`、外部权重、tokenizer 文件和
+`genai_config.json`。可选上传 cell 会创建模型卡并弹出 Hugging Face 登录提示；
+请使用对目标仓库有写入权限的账户及 token，不要将 token 写入 notebook 或仓库。
+
+问题格式和选项洗牌参考
+[Hmm 的训练脚本](https://github.com/n4ze3m/hmm/blob/main/training/train.py)，
+但**训练目标不同**：Olive 针对 gold 答案进行完整序列语言模型 SFT，不会训练
+Hmm 仅针对候选字母的 hard/teacher soft-label 混合损失，也不会在每个 step
+重新洗牌。teacher 概率只保留作分析。Olive 的完整序列 `eval_loss` 不等于候选
+字母的 NLL、accuracy 或 ECE；此处也不声称两者有相同的校准或基准测试结果。
+训练、导出、评估和上传都需要在合适的 GPU 环境中实际执行并验证。
 
 ## 可复现版本
 
